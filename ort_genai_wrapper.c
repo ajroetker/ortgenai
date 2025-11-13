@@ -1,0 +1,236 @@
+#include "ort_genai_wrapper.h"
+
+static GenAiApiTable g_api = {0}; // api table
+static int g_initialized = 0;
+
+int SetGenAiApi(void* createModel,
+				void* resultGetError,
+				void* destroyResult,
+				void* destroyModel,
+				void* createTokenizer,
+				void* destroyTokenizer,
+				void* createTokenizerStream,
+				void* destroyTokenizerStream,
+				void* applyChatTemplate,
+				void* destroyString,
+				void* createSequences,
+				void* destroySequences,
+			void* tokenizerEncode,
+			void* createGenerator,
+			void* destroyGenerator,
+			void* createGeneratorParams,
+			void* destroyGeneratorParams,
+			void* generatorParamsSetSearchNumber,
+			void* generatorAppendTokenSequences,
+			void* generatorGenerateNextToken,
+			void* generatorGetSequenceCount,
+			void* generatorGetSequenceData,
+			void* tokenizerStreamDecode,
+			void* isDone,
+			// Config
+			void* createConfig,
+			void* configClearProviders,
+			void* configAppendProvider,
+			void* configSetProviderOption,
+			void* createModelFromConfig) {
+	if (g_initialized) return 0; // already initialized
+	// Validate all required pointers (header comment: all must be non-null)
+	if (!createModel || !resultGetError || !destroyResult || !destroyModel ||
+		!createTokenizer || !destroyTokenizer || !createTokenizerStream || !destroyTokenizerStream ||
+		!applyChatTemplate || !destroyString || !createSequences || !destroySequences || !tokenizerEncode ||
+		!createGenerator || !destroyGenerator || !createGeneratorParams || !destroyGeneratorParams ||
+		!generatorParamsSetSearchNumber || !generatorAppendTokenSequences || !generatorGenerateNextToken ||
+		!generatorGetSequenceCount || !generatorGetSequenceData || !tokenizerStreamDecode || !isDone ||
+		// Config
+		!createConfig || !configClearProviders || !configAppendProvider || !configSetProviderOption || !createModelFromConfig) {
+		return 1;
+	}
+	g_api.CreateModel = (PFN_OgaCreateModel) createModel;
+	g_api.ResultGetError = (PFN_OgaResultGetError) resultGetError;
+	g_api.DestroyResult = (PFN_OgaDestroyResult) destroyResult;
+	g_api.DestroyModel = (PFN_OgaDestroyModel) destroyModel;
+	g_api.CreateTokenizer = (PFN_OgaCreateTokenizer) createTokenizer;
+	g_api.DestroyTokenizer = (PFN_OgaDestroyTokenizer) destroyTokenizer;
+	g_api.CreateTokenizerStream = (PFN_OgaCreateTokenizerStream) createTokenizerStream;
+	g_api.DestroyTokenizerStream = (PFN_OgaDestroyTokenizerStream) destroyTokenizerStream;
+	g_api.ApplyChatTemplate = (PFN_OgaTokenizerApplyChatTemplate) applyChatTemplate;
+	g_api.DestroyString = (PFN_OgaDestroyString) destroyString;
+	g_api.CreateSequences = (PFN_OgaCreateSequences) createSequences;
+	g_api.DestroySequences = (PFN_OgaDestroySequences) destroySequences;
+	g_api.TokenizerEncode = (PFN_OgaTokenizerEncode) tokenizerEncode;
+	g_api.CreateGenerator = (PFN_OgaCreateGenerator) createGenerator;
+	g_api.DestroyGenerator = (PFN_OgaDestroyGenerator) destroyGenerator;
+	g_api.CreateGeneratorParams = (PFN_OgaCreateGeneratorParams) createGeneratorParams;
+	g_api.DestroyGeneratorParams = (PFN_OgaDestroyGeneratorParams) destroyGeneratorParams;
+	g_api.GeneratorParamsSetSearchNumber = (PFN_OgaGeneratorParamsSetSearchNumber) generatorParamsSetSearchNumber;
+	g_api.GeneratorAppendTokenSequences = (PFN_OgaGeneratorAppendTokenSequences) generatorAppendTokenSequences;
+	g_api.GeneratorGenerateNextToken = (PFN_OgaGeneratorGenerateNextToken) generatorGenerateNextToken;
+	g_api.GeneratorGetSequenceCount = (PFN_OgaGeneratorGetSequenceCount) generatorGetSequenceCount;
+	g_api.GeneratorGetSequenceData = (PFN_OgaGeneratorGetSequenceData) generatorGetSequenceData;
+	g_api.TokenizerStreamDecode = (PFN_OgaTokenizerStreamDecode) tokenizerStreamDecode;
+	g_api.IsDone = (PFN_OgaGeneratorIsDone) isDone;
+	// Config
+	g_api.CreateConfig = (PFN_OgaCreateConfig) createConfig;
+	g_api.ConfigClearProviders = (PFN_OgaConfigClearProviders) configClearProviders;
+	g_api.ConfigAppendProvider = (PFN_OgaConfigAppendProvider) configAppendProvider;
+	g_api.ConfigSetProviderOption = (PFN_OgaConfigSetProviderOption) configSetProviderOption;
+	g_api.CreateModelFromConfig = (PFN_OgaCreateModelFromConfig) createModelFromConfig;
+	g_initialized = 1;
+	return 0;
+}
+
+int GenAiApiIsInitialized(void) { return g_initialized; }
+
+OgaResult* CreateOgaModel(const char* config_path, OgaModel** out) {
+	if (!g_initialized || !g_api.CreateModel) return NULL;
+	return g_api.CreateModel(config_path, out);
+}
+
+OgaResult* CreateOgaTokenizer(const OgaModel* model, OgaTokenizer** out) {
+	if (!g_initialized || !g_api.CreateTokenizer) return NULL;
+	return g_api.CreateTokenizer(model, out);
+}
+
+OgaResult* CreateOgaTokenizerStream(const OgaTokenizer* tokenizer, OgaTokenizerStream** out) {
+	if (!g_initialized || !g_api.CreateTokenizerStream) return NULL;
+	return g_api.CreateTokenizerStream(tokenizer, out);
+}
+
+const char* GetOgaResultErrorString(const OgaResult* result) {
+	if (!g_initialized || !g_api.ResultGetError) return "GenAI API not initialized";
+	return g_api.ResultGetError(result);
+}
+
+void DestroyOgaResult(OgaResult* result) {
+	if (!result) return;
+	if (!g_initialized || !g_api.DestroyResult) return;
+	g_api.DestroyResult(result);
+}
+
+void DestroyOgaModel(OgaModel* model) {
+	if (!model) return;
+	if (!g_initialized || !g_api.DestroyModel) return;
+	g_api.DestroyModel(model);
+}
+
+void DestroyOgaTokenizer(OgaTokenizer* tokenizer) {
+	if (!tokenizer) return;
+	if (!g_initialized || !g_api.DestroyTokenizer) return;
+	g_api.DestroyTokenizer(tokenizer);
+}
+
+void DestroyOgaTokenizerStream(OgaTokenizerStream* tokenizerStream) {
+	if (!tokenizerStream) return;
+	if (!g_initialized || !g_api.DestroyTokenizerStream) return;
+	g_api.DestroyTokenizerStream(tokenizerStream);
+}
+
+void DestroyOgaString(const char* str) {
+	if (!str) return;
+	if (!g_initialized || !g_api.DestroyString) return;
+	g_api.DestroyString(str);
+}
+
+OgaResult* ApplyOgaTokenizerChatTemplate(const OgaTokenizer* tokenizer, const char* input, const char* param1, const char* param2, bool flag, const char** output) {
+	if (!g_initialized || !g_api.ApplyChatTemplate) return NULL;
+	return g_api.ApplyChatTemplate(tokenizer, input, param1, param2, flag, output);
+}
+
+OgaResult* CreateOgaSequences(OgaSequences** out) {
+	if (!g_initialized || !g_api.CreateSequences) return NULL;
+	return g_api.CreateSequences(out);
+}
+
+void DestroyOgaSequences(OgaSequences* sequences) {
+	if (!sequences) return;
+	if (!g_initialized || !g_api.DestroySequences) return;
+	g_api.DestroySequences(sequences);
+}
+
+OgaResult* TokenizerEncode(const OgaTokenizer* tokenizer, const char* str, OgaSequences* sequences) {
+	if (!g_initialized || !g_api.TokenizerEncode) return NULL;
+	return g_api.TokenizerEncode(tokenizer, str, sequences);
+}
+
+OgaResult* CreateOgaGenerator(const OgaModel* model, const OgaGeneratorParams* generatorParams, OgaGenerator** out) {
+	if (!g_initialized || !g_api.CreateGenerator) return NULL;
+	return g_api.CreateGenerator(model, generatorParams, out);
+}
+
+void DestroyOgaGenerator(OgaGenerator* generator) {
+	if (!generator) return;
+	if (!g_initialized || !g_api.DestroyGenerator) return;
+	g_api.DestroyGenerator(generator);
+}
+
+OgaResult* CreateOgaGeneratorParams(const OgaModel* model,OgaGeneratorParams** out) {
+	if (!g_initialized || !g_api.CreateGeneratorParams) return NULL;
+	return g_api.CreateGeneratorParams(model, out);
+}
+
+void DestroyOgaGeneratorParams(OgaGeneratorParams* generatorParams) {
+	if (!generatorParams) return;
+	if (!g_initialized || !g_api.DestroyGeneratorParams) return;
+	g_api.DestroyGeneratorParams(generatorParams);
+}
+
+OgaResult* GeneratorParamsSetSearchNumber(OgaGeneratorParams* generatorParams, const char* name, double searchNumber) {
+    if (!g_initialized || !g_api.GeneratorParamsSetSearchNumber) return NULL;
+    return g_api.GeneratorParamsSetSearchNumber(generatorParams, name, searchNumber);
+}
+
+OgaResult* GeneratorAppendTokenSequences(OgaGenerator* generator, OgaSequences* sequences) {
+	if (!g_initialized || !g_api.GeneratorAppendTokenSequences) return NULL;
+	return g_api.GeneratorAppendTokenSequences(generator, sequences);
+}
+
+OgaResult* GeneratorGenerateNextToken(OgaGenerator* generator) {
+	if (!g_initialized || !g_api.GeneratorGenerateNextToken) return NULL;
+	return g_api.GeneratorGenerateNextToken(generator);
+}
+
+size_t GeneratorGetSequenceCount(const OgaGenerator* generator, size_t sequence_index) {
+	if (!g_initialized || !g_api.GeneratorGetSequenceCount) return 0;
+	return g_api.GeneratorGetSequenceCount(generator, sequence_index);
+}
+
+const int32_t* GeneratorGetSequenceData(const OgaGenerator* generator, size_t sequence_index) {
+	if (!g_initialized || !g_api.GeneratorGetSequenceData) return NULL;
+	return g_api.GeneratorGetSequenceData(generator, sequence_index);
+}
+
+OgaResult* TokenizerStreamDecode(OgaTokenizerStream* tokenizerStream, int32_t token, const char** output) {
+	if (!g_initialized || !g_api.TokenizerStreamDecode) return NULL;
+	return g_api.TokenizerStreamDecode(tokenizerStream, token, output);
+}
+
+bool IsDone(const OgaGenerator* generator) {
+	if (!g_initialized || !g_api.IsDone) return false;
+	return g_api.IsDone(generator);
+}
+
+// Config thin wrappers
+OgaResult* CreateOgaConfig(const char* config_path, OgaConfig** out) {
+	if (!g_initialized || !g_api.CreateConfig) return NULL;
+	return g_api.CreateConfig(config_path, out);
+}
+
+OgaResult* OgaConfigClearProviders(OgaConfig* config) {
+	if (!g_initialized || !g_api.ConfigClearProviders) return NULL;
+	return g_api.ConfigClearProviders(config);
+}
+
+OgaResult* OgaConfigAppendProvider(OgaConfig* config, const char* provider) {
+	if (!g_initialized || !g_api.ConfigAppendProvider) return NULL;
+	return g_api.ConfigAppendProvider(config, provider);
+}
+
+OgaResult* OgaConfigSetProviderOption(OgaConfig* config, const char* provider, const char* key, const char* value) {
+	if (!g_initialized || !g_api.ConfigSetProviderOption) return NULL;
+	return g_api.ConfigSetProviderOption(config, provider, key, value);
+}
+
+OgaResult* CreateOgaModelFromConfig(const OgaConfig* config, OgaModel** out) {
+	if (!g_initialized || !g_api.CreateModelFromConfig) return NULL;
+	return g_api.CreateModelFromConfig(config, out);
+}

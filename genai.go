@@ -483,8 +483,8 @@ func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []str
 	for _, providerName := range providers {
 		cp := C.CString(providerName)
 		res = C.OgaConfigAppendProvider(cfg, cp)
-		defer C.free(unsafe.Pointer(cp))
 		if err := OgaResultToError(res); err != nil {
+			C.free(unsafe.Pointer(cp))
 			return nil, fmt.Errorf("OgaConfigAppendProvider(%s) failed: %w", providerName, err)
 		}
 		if opts, ok := providerOptions[providerName]; ok {
@@ -495,10 +495,12 @@ func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []str
 				C.free(unsafe.Pointer(ck))
 				C.free(unsafe.Pointer(cv))
 				if err := OgaResultToError(res); err != nil {
+					C.free(unsafe.Pointer(cp))
 					return nil, fmt.Errorf("OgaConfigSetProviderOption(%s,%s=%s) failed: %w", providerName, k, v, err)
 				}
 			}
 		}
+		C.free(unsafe.Pointer(cp))
 	}
 
 	// Create Model from Config

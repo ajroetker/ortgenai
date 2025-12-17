@@ -1,11 +1,8 @@
 ARG BUILD_PLATFORM=linux/amd64
 
-FROM --platform=$BUILD_PLATFORM onnxruntime-go-genai:latest AS genai-test
+FROM --platform=$BUILD_PLATFORM ortgenai:latest AS ortgenai-test
 
 COPY . /build
-COPY --from=models /models /build/models
-
-# need to fix model download
 
 RUN cd /build && \
     chown -R testuser:testuser /build && \
@@ -18,4 +15,4 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 #--- artifacts layer ---
 FROM --platform=$BUILD_PLATFORM scratch AS artifacts
-COPY --from=genai-test /usr/lib64/libonnxruntime-genai.so libonnxruntime-genai-linux-x64.so
+COPY --from=ortgenai-test /usr/lib/libonnxruntime-genai.so libonnxruntime-genai-linux-x64.so

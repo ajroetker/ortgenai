@@ -1,4 +1,4 @@
-# onnxruntime-go-genai
+# ortgenai
 
 Go bindings for the ONNX Runtime GenAI C API.
 
@@ -39,7 +39,7 @@ Note: This implementation is still alpha so the API may change in future release
 ## Installation
 
 ```bash
-go get github.com/knights-analytics/onnxruntime-go-genai
+go get github.com/knights-analytics/ortgenai
 ```
 
 At runtime, the wrapper needs to `dlopen` the ONNX Runtime GenAI shared library. You can:
@@ -58,13 +58,13 @@ import (
     "fmt"
     "time"
 
-    genai "github.com/knights-analytics/onnxruntime-go-genai"
+    genai "github.com/knights-analytics/ortgenai"
 )
 
 func main() {
     // Optional: set explicit path if the .so isn't on the default loader path
     // Note: ensure libonnxruntime.so is colocated with libonnxruntime-genai.so
-    genai.SetSharedLibraryPath("/usr/lib64/libonnxruntime-genai.so")
+    genai.SetSharedLibraryPath("/usr/lib/libonnxruntime-genai.so")
 
     if err := genai.InitializeEnvironment(); err != nil {
         panic(fmt.Errorf("init failed: %w", err))
@@ -156,7 +156,7 @@ After generation, inspect `session.GetStatistics()` for fields such as `TokensPe
 
 Local tests require the GenAI shared libraries and a local model directory. The provided unit test expects:
 
-- `libonnxruntime-genai.so` available (by default at `/usr/lib64/libonnxruntime-genai.so` in the test; adjust via `SetSharedLibraryPath`), and
+- `libonnxruntime-genai.so` available (by default at `/usr/lib/libonnxruntime-genai.so` in the test; adjust via `SetSharedLibraryPath`), and
 - a model directory at `./_models/phi3.5` (update the path as needed).
 
 Run:

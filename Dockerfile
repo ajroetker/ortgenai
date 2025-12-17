@@ -1,4 +1,4 @@
-#--- dockerfile to test onnxruntime-go-genai ---
+#--- dockerfile to test ortgenai ---
 
 ARG GO_VERSION=1.25.5
 ARG ONNXRUNTIME_VERSION=1.22.0

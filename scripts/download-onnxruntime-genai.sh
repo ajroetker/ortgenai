@@ -7,22 +7,27 @@ this_dir="$( cd "$( dirname "$0" )" && pwd )"
 src_dir="$(realpath "${this_dir}/..")"
 export src_dir
 
-onnxruntime_version="$1"
+onnxruntime_genai_version="$1"
+gpu="$2"
 
-if [[ -z $onnxruntime_version ]]; then
+if [[ -z $onnxruntime_genai_version ]]; then
     echo version is required
     exit 1
 fi
 
-name="onnxruntime-genai-${onnxruntime_version}"-linux-x64
-url="https://github.com/microsoft/onnxruntime-genai/releases/download/v${onnxruntime_version}/onnxruntime-genai-${onnxruntime_version}-linux-x64.tar.gz"
+version=""
+if [[ -n $gpu ]]; then
+    version="-cuda"
+fi
 
-echo Downloading version "$onnxruntime_version" \(cpu\) from "${url} into $(pwd)"
+url="https://github.com/microsoft/onnxruntime-genai/releases/download/v${onnxruntime_genai_version}/onnxruntime-genai-${onnxruntime_genai_version}-linux-x64${version}.tar.gz"
+echo Downloading version "${onnxruntime_genai_version}${version}" from "${url} into $(pwd)"
 
 function cleanup() {
-    rm -r "$name.tar.gz" "$name" || true
+    rm -r "onnxruntime-genai-${onnxruntime_genai_version}-linux-x64${version}.tar.gz" "onnxruntime-genai-${onnxruntime_genai_version}-linux-x64${version}" || true
 }
 
 trap cleanup EXIT
 
-curl -LO "$url" && tar -xzf "./$name.tar.gz" && mv "./$name/lib/libonnxruntime-genai.so" /usr/lib64/libonnxruntime-genai.so
+curl -LO "$url" && tar -xzf "./onnxruntime-genai-${onnxruntime_genai_version}-linux-x64${version}.tar.gz" && \
+    cp onnxruntime-genai-"${onnxruntime_genai_version}"-linux-x64${version}/lib/libonnxruntime* /usr/lib

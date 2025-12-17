@@ -43,8 +43,8 @@ jobs:
         continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
-          name: libonnxruntime-genai.so
-          path: ./artifacts/libonnxruntime-genai.so
+          name: libonnxruntime-genai-linux-x64.so.so
+          path: ./artifacts/libonnxruntime-genai-linux-x64.so
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v4
         if: success() || failure()

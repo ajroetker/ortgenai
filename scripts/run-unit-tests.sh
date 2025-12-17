@@ -16,8 +16,8 @@ host_uid=$(id -u "$USER")
 export host_uid
 
 # build with compose
-docker compose -f "$src_dir/compose-test.yaml" build onnruntime-go-genai && \
-docker compose -f "$src_dir/compose-test.yaml" build onnruntime-go-genai-test
+docker compose -f "$src_dir/compose-test.yaml" build ortgenai && \
+docker compose -f "$src_dir/compose-test.yaml" build ortgenai-test
 
 docker builder prune --all || true
 

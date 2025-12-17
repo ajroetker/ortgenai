@@ -1,6 +1,6 @@
 services:
-  genai:
-    image: onnxruntime-go-genai:latest
+  ortgenai:
+    image: ortgenai:latest
     platform: linux/amd64
     build:
       context: .
@@ -8,15 +8,15 @@ services:
     # This service is build-only and not started
     entrypoint: ["/bin/true"]
 
-  genai-test:
+  ortgenai-test:
     platform: linux/amd64
-    container_name: genai-test
+    container_name: ortgenai-test
     build:
       context: .
       dockerfile: ./test.Dockerfile
-      target: genai-test
+      target: ortgenai-test
     depends_on:
-      - genai
+      - ortgenai
     volumes:
       - $test_folder:/test
       - $test_folder/../scripts/run-unit-tests-container.sh:/run-unit-tests-container.sh

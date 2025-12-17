@@ -10,7 +10,7 @@ import (
 
 func TestGenerationGPU(t *testing.T) {
 	t.Skip() // skip by default in CI
-	SetSharedLibraryPath("/usr/lib64/libonnxruntime-genai.so")
+	SetSharedLibraryPath("/usr/lib/libonnxruntime-genai.so")
 
 	if err := InitializeEnvironment(); err != nil {
 		t.Fatalf("failed to initialize environment: %v", err)

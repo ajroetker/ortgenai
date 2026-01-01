@@ -163,14 +163,10 @@ type Statistics struct {
 	AvgPrefillSeconds float64
 	TokensPerSecond   float64
 	// cumulative
-	cumulativePrefillSum           float64
-	cumulativePrefillCount         int
-	cumulativeTokens               int
-	cumulativeTokenDurationSeconds float64
-	// per-run
-	runStart           time.Time
-	runFirstTokenTimes []time.Time
-	runTokenCount      int
+	CumulativePrefillSum   float64
+	CumulativePrefillCount         int
+	CumulativeTokens               int
+	CumulativeTokenDurationSeconds float64
 }
 
 // GetStatistics returns the last computed statistics for the session.
@@ -303,7 +299,6 @@ func sendGenerationError(errChan chan<- error, err error) {
 
 func (s *Session) Generate(ctx context.Context, messages [][]Message, generationOptions *GenerationOptions) (<-chan SequenceDelta, <-chan error, error) {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	sequences, tokenizerStreams, tokenizeErr := s.tokenizer.tokenizeMessages(messages)
 	if tokenizeErr != nil {
 		return nil, nil, fmt.Errorf("TokenizeMessages failed: %w", tokenizeErr)
@@ -338,29 +333,29 @@ func (s *Session) Generate(ctx context.Context, messages [][]Message, generation
 
 		var result *C.OgaResult
 
-		s.statistics.runStart = time.Now()
-		s.statistics.runFirstTokenTimes = make([]time.Time, len(messages))
-		s.statistics.runTokenCount = 0
+		// Use goroutine-local variables for per-run statistics to avoid race conditions
+		// when multiple Generate calls run concurrently on the same session.
+		runStart := time.Now()
+		runFirstTokenTimes := make([]time.Time, len(messages))
+		runTokenCount := 0
 
 		// finalize tokens/sec at the end of the run
 		defer func() {
 			var earliest time.Time
-			for _, ft := range s.statistics.runFirstTokenTimes {
+			for _, ft := range runFirstTokenTimes {
 				if !ft.IsZero() && (earliest.IsZero() || ft.Before(earliest)) {
 					earliest = ft
 				}
 			}
-			if !earliest.IsZero() && s.statistics.runTokenCount > 0 {
+			if !earliest.IsZero() && runTokenCount > 0 {
 				dur := time.Since(earliest).Seconds()
 				if dur > 0 {
-					s.statistics.cumulativeTokenDurationSeconds += dur
-					s.statistics.TokensPerSecond = float64(s.statistics.cumulativeTokens) / s.statistics.cumulativeTokenDurationSeconds
+					s.statistics.CumulativeTokenDurationSeconds += dur
+					s.statistics.TokensPerSecond = float64(s.statistics.CumulativeTokens) / s.statistics.CumulativeTokenDurationSeconds
 				}
 			}
-			s.statistics.runFirstTokenTimes = nil
-			s.statistics.runTokenCount = 0
-			s.statistics.runStart = time.Time{}
 		}()
+		defer s.mutex.Unlock()
 
 		firstEmitted := make([]bool, len(messages))
 		lastChar := make([]rune, len(messages))
@@ -415,15 +410,15 @@ func (s *Session) Generate(ctx context.Context, messages [][]Message, generation
 				lastChar[i] = r[len(r)-1]
 
 				// stats
-				if s.statistics.runFirstTokenTimes[i].IsZero() {
-					s.statistics.runFirstTokenTimes[i] = time.Now()
-					prefill := s.statistics.runFirstTokenTimes[i].Sub(s.statistics.runStart).Seconds()
-					s.statistics.cumulativePrefillSum += prefill
-					s.statistics.cumulativePrefillCount++
-					s.statistics.AvgPrefillSeconds = s.statistics.cumulativePrefillSum / float64(s.statistics.cumulativePrefillCount)
+				if runFirstTokenTimes[i].IsZero() {
+					runFirstTokenTimes[i] = time.Now()
+					prefill := runFirstTokenTimes[i].Sub(runStart).Seconds()
+					s.statistics.CumulativePrefillSum += prefill
+					s.statistics.CumulativePrefillCount++
+					s.statistics.AvgPrefillSeconds = s.statistics.CumulativePrefillSum / float64(s.statistics.CumulativePrefillCount)
 				}
-				s.statistics.cumulativeTokens++
-				s.statistics.runTokenCount++
+				s.statistics.CumulativeTokens++
+				runTokenCount++
 				select {
 				case outputChan <- SequenceDelta{Sequence: i, Tokens: decoded}:
 				case <-ctx.Done():

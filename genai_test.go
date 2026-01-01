@@ -138,10 +138,10 @@ func TestGeneration(t *testing.T) {
 
 	fmt.Println("statistics:")
 	stats := session.GetStatistics()
-	fmt.Printf("Cumulative prefill count: %d\n", stats.cumulativePrefillCount)
-	fmt.Printf("Cumulative prefill seconds: %.2f\n", stats.cumulativePrefillSum)
+	fmt.Printf("Cumulative prefill count: %d\n", stats.CumulativePrefillCount)
+	fmt.Printf("Cumulative prefill seconds: %.2f\n", stats.CumulativePrefillSum)
 	fmt.Printf("Average prefill seconds: %.2f\n", stats.AvgPrefillSeconds)
-	fmt.Printf("Cumulative tokens: %d\n", stats.cumulativeTokens)
-	fmt.Printf("Cumulative token duration seconds: %.2f\n", stats.cumulativeTokenDurationSeconds)
+	fmt.Printf("Cumulative tokens: %d\n", stats.CumulativeTokens)
+	fmt.Printf("Cumulative token duration seconds: %.2f\n", stats.CumulativeTokenDurationSeconds)
 	fmt.Printf("Tokens per second: %.2f\n", stats.TokensPerSecond)
 }

@@ -599,7 +599,9 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 		// Use goroutine-local variables for per-run statistics to avoid race conditions
 		// when multiple Generate calls run concurrently on the same session.
 		runStart := time.Now()
-		runFirstTokenTimes := make([]time.Time, generationOptions.BatchSize)
+		// Use a map for first token times since the number of sequences may vary
+		// (especially for multimodal models where sequence count can differ from batch size)
+		runFirstTokenTimes := make(map[int]time.Time)
 		runTokenCount := 0
 
 		// finalize tokens/sec at the end of the run
@@ -639,8 +641,9 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 				return
 			}
 
-			numSeq := int(C.GeneratorGetSequenceCount(generator.generatorPtr, 0))
-			for i := 0; i < numSeq; i++ {
+			// Iterate over each sequence in the batch
+			// Note: generationOptions.BatchSize tells us how many sequences we have
+			for i := range generationOptions.BatchSize {
 				seqLen := C.GeneratorGetSequenceCount(generator.generatorPtr, C.size_t(i))
 				if seqLen == 0 {
 					continue
@@ -663,7 +666,7 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 				}
 
 				// stats
-				if runFirstTokenTimes[i].IsZero() {
+				if _, seen := runFirstTokenTimes[i]; !seen {
 					runFirstTokenTimes[i] = time.Now()
 					prefill := runFirstTokenTimes[i].Sub(runStart).Seconds()
 					// Update cumulative statistics with mutex protection

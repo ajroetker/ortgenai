@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -767,6 +768,11 @@ func LoadImageFromBuffer(imageData []byte) (*Images, error) {
 		return nil, errors.New("image data is empty")
 	}
 
+	// Pin the Go memory before passing to C
+	var pinner runtime.Pinner
+	pinner.Pin(&imageData[0])
+	defer pinner.Unpin()
+
 	// Create C array of pointers and sizes
 	dataPtr := unsafe.Pointer(&imageData[0])
 	dataSize := C.size_t(len(imageData))
@@ -872,10 +878,15 @@ func LoadImagesFromBuffers(imageBuffers [][]byte) (*Images, error) {
 	dataPtrs := make([]unsafe.Pointer, len(imageBuffers))
 	dataSizes := make([]C.size_t, len(imageBuffers))
 
+	// Pin all buffer memory before passing to C
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+
 	for i, buf := range imageBuffers {
 		if len(buf) == 0 {
 			return nil, fmt.Errorf("image buffer at index %d is empty", i)
 		}
+		pinner.Pin(&buf[0])
 		dataPtrs[i] = unsafe.Pointer(&buf[0])
 		dataSizes[i] = C.size_t(len(buf))
 	}

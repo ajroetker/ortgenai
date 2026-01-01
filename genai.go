@@ -596,27 +596,32 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 		defer generator.destroy()
 		defer tokStream.destroy()
 
-		s.statistics.runStart = time.Now()
-		s.statistics.runFirstTokenTimes = make([]time.Time, generationOptions.BatchSize)
-		s.statistics.runTokenCount = 0
+		// Use goroutine-local variables for per-run statistics to avoid race conditions
+		// when multiple Generate calls run concurrently on the same session.
+		runStart := time.Now()
+		// Use a map for first token times since the number of sequences may vary
+		// (especially for multimodal models where sequence count can differ from batch size)
+		runFirstTokenTimes := make(map[int]time.Time)
+		runTokenCount := 0
 
+		// finalize tokens/sec at the end of the run
 		defer func() {
 			var earliest time.Time
-			for _, ft := range s.statistics.runFirstTokenTimes {
+			for _, ft := range runFirstTokenTimes {
 				if !ft.IsZero() && (earliest.IsZero() || ft.Before(earliest)) {
 					earliest = ft
 				}
 			}
-			if !earliest.IsZero() && s.statistics.runTokenCount > 0 {
+			if !earliest.IsZero() && runTokenCount > 0 {
 				dur := time.Since(earliest).Seconds()
 				if dur > 0 {
+					// Update cumulative statistics with mutex protection
+					s.mutex.Lock()
 					s.statistics.cumulativeTokenDurationSeconds += dur
 					s.statistics.TokensPerSecond = float64(s.statistics.cumulativeTokens) / s.statistics.cumulativeTokenDurationSeconds
+					s.mutex.Unlock()
 				}
 			}
-			s.statistics.runFirstTokenTimes = nil
-			s.statistics.runTokenCount = 0
-			s.statistics.runStart = time.Time{}
 		}()
 
 		for !generator.IsDone() {
@@ -636,8 +641,9 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 				return
 			}
 
-			numSeq := int(C.GeneratorGetSequenceCount(generator.generatorPtr, 0))
-			for i := 0; i < numSeq; i++ {
+			// Iterate over each sequence in the batch
+			// Note: generationOptions.BatchSize tells us how many sequences we have
+			for i := range generationOptions.BatchSize {
 				seqLen := C.GeneratorGetSequenceCount(generator.generatorPtr, C.size_t(i))
 				if seqLen == 0 {
 					continue
@@ -659,15 +665,21 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 					continue
 				}
 
-				if s.statistics.runFirstTokenTimes[i].IsZero() {
-					s.statistics.runFirstTokenTimes[i] = time.Now()
-					prefill := s.statistics.runFirstTokenTimes[i].Sub(s.statistics.runStart).Seconds()
+				// stats
+				if _, seen := runFirstTokenTimes[i]; !seen {
+					runFirstTokenTimes[i] = time.Now()
+					prefill := runFirstTokenTimes[i].Sub(runStart).Seconds()
+					// Update cumulative statistics with mutex protection
+					s.mutex.Lock()
 					s.statistics.cumulativePrefillSum += prefill
 					s.statistics.cumulativePrefillCount++
 					s.statistics.AvgPrefillSeconds = s.statistics.cumulativePrefillSum / float64(s.statistics.cumulativePrefillCount)
+					s.mutex.Unlock()
 				}
+				s.mutex.Lock()
 				s.statistics.cumulativeTokens++
-				s.statistics.runTokenCount++
+				s.mutex.Unlock()
+				runTokenCount++
 
 				select {
 				case outputChan <- SequenceDelta{Sequence: i, Tokens: decoded}:

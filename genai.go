@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -643,7 +642,7 @@ func (s *Session) GenerateWithTensors(ctx context.Context, namedTensors *NamedTe
 
 			// Iterate over each sequence in the batch
 			// Note: generationOptions.BatchSize tells us how many sequences we have
-			for i := range generationOptions.BatchSize {
+			for i := 0; i < generationOptions.BatchSize; i++ {
 				seqLen := C.GeneratorGetSequenceCount(generator.generatorPtr, C.size_t(i))
 				if seqLen == 0 {
 					continue
@@ -780,13 +779,16 @@ func LoadImageFromBuffer(imageData []byte) (*Images, error) {
 		return nil, errors.New("image data is empty")
 	}
 
-	// Pin the Go memory before passing to C
-	var pinner runtime.Pinner
-	pinner.Pin(&imageData[0])
-	defer pinner.Unpin()
+	// Copy Go memory to C-allocated memory for safe CGO call
+	cData := C.malloc(C.size_t(len(imageData)))
+	if cData == nil {
+		return nil, errors.New("failed to allocate C memory")
+	}
+	defer C.free(cData)
+	C.memcpy(cData, unsafe.Pointer(&imageData[0]), C.size_t(len(imageData)))
 
 	// Create C array of pointers and sizes
-	dataPtr := unsafe.Pointer(&imageData[0])
+	dataPtr := cData
 	dataSize := C.size_t(len(imageData))
 
 	var cImages *C.OgaImages
@@ -890,18 +892,36 @@ func LoadImagesFromBuffers(imageBuffers [][]byte) (*Images, error) {
 	dataPtrs := make([]unsafe.Pointer, len(imageBuffers))
 	dataSizes := make([]C.size_t, len(imageBuffers))
 
-	// Pin all buffer memory before passing to C
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
-
+	// Copy Go memory to C-allocated memory for safe CGO call
+	cDataPtrs := make([]unsafe.Pointer, len(imageBuffers))
 	for i, buf := range imageBuffers {
 		if len(buf) == 0 {
+			// Free already allocated memory before returning
+			for j := 0; j < i; j++ {
+				C.free(cDataPtrs[j])
+			}
 			return nil, fmt.Errorf("image buffer at index %d is empty", i)
 		}
-		pinner.Pin(&buf[0])
-		dataPtrs[i] = unsafe.Pointer(&buf[0])
+		cData := C.malloc(C.size_t(len(buf)))
+		if cData == nil {
+			// Free already allocated memory before returning
+			for j := 0; j < i; j++ {
+				C.free(cDataPtrs[j])
+			}
+			return nil, fmt.Errorf("failed to allocate C memory for buffer %d", i)
+		}
+		C.memcpy(cData, unsafe.Pointer(&buf[0]), C.size_t(len(buf)))
+		cDataPtrs[i] = cData
+		dataPtrs[i] = cData
 		dataSizes[i] = C.size_t(len(buf))
 	}
+
+	// Ensure all C memory is freed after the call
+	defer func() {
+		for _, ptr := range cDataPtrs {
+			C.free(ptr)
+		}
+	}()
 
 	var cImages *C.OgaImages
 	res := C.LoadOgaImagesFromBuffers(

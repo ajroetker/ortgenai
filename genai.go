@@ -171,16 +171,11 @@ func (m *model) destroy() {
 	m.modelPtr = nil
 }
 
-type SessionOptions struct {
-	Multimodal bool
-}
-
 type Session struct {
 	model      *model
 	processor  *multiModalProcessor
 	tokenizer  *tokenizer
 	statistics *Statistics
-	options    *SessionOptions
 	mutex      sync.Mutex // the C API is not thread-safe
 }
 
@@ -487,20 +482,38 @@ func (s *Session) Generate(ctx context.Context, messages [][]Message, generation
 
 // GenerateWithImages generates text using pre-processed named tensors (for multimodal inputs).
 // Currently only supports a single prompt.
-func (s *Session) GenerateWithImages(ctx context.Context, prompts []string, images *Images, generationOptions *GenerationOptions) (<-chan SequenceDelta, <-chan error, error) {
+func (s *Session) GenerateWithImages(ctx context.Context, messages [][]Message, images *Images, generationOptions *GenerationOptions) (<-chan SequenceDelta, <-chan error, error) {
 	s.mutex.Lock()
 
-	if s.options == nil || !s.options.Multimodal {
+	// Current limitation: underlying C API supports a single prompt with image tags
+	if len(messages) != 1 {
 		s.mutex.Unlock()
-		return nil, nil, errors.New("session was not created with multimodal support")
+		return nil, nil, errors.New("GenerateWithImages currently supports only a single message set")
 	}
 
-	if len(prompts) != 1 {
+	// Build prompt from chat template using messages[0]
+	msgJSON, err := json.Marshal(messages[0])
+	if err != nil {
 		s.mutex.Unlock()
-		return nil, nil, errors.New("GenerateWithImages currently supports only a single prompt")
+		return nil, nil, fmt.Errorf("failed to marshal input message: %w", err)
+	}
+	prompt, templateErr := s.tokenizer.ApplyChatTemplate(msgJSON, true)
+	if templateErr != nil {
+		s.mutex.Unlock()
+		return nil, nil, fmt.Errorf("failed to apply chat template: %w", templateErr)
 	}
 
-	tensors, err := s.processor.ProcessImages(prompts[0], images)
+	// Process images with the templated prompt (should include <|image_1|> etc.)
+	if s.processor == nil {
+		// Initialize multimodal processor
+		err = initMultimodalProcessor(s)
+		if err != nil {
+			s.mutex.Unlock()
+			return nil, nil, fmt.Errorf("initMultimodalProcessor failed: %w", err)
+		}
+	}
+
+	tensors, err := s.processor.ProcessImages(prompt, images)
 	if err != nil {
 		s.mutex.Unlock()
 		return nil, nil, fmt.Errorf("ProcessImages failed: %w", err)
@@ -510,8 +523,8 @@ func (s *Session) GenerateWithImages(ctx context.Context, prompts []string, imag
 	if generationOptions == nil {
 		generationOptions = &GenerationOptions{MaxLength: defaultMaxLength}
 	}
-	if generationOptions.BatchSize != len(prompts) {
-		generationOptions.BatchSize = len(prompts)
+	if generationOptions.BatchSize != len(messages) {
+		generationOptions.BatchSize = len(messages)
 	}
 
 	generator, err := s.createGenerator(generationOptions)
@@ -566,7 +579,7 @@ func (s *Session) Destroy() {
 // applies execution providers and options, creates the model and tokenizer, and returns a Session.
 // providers: list of EP names in priority order (e.g., ["cuda"], ["NvTensorRtRtx"], ["OpenVINO"]).
 // providerOptions: map of EP name -> map of key/value options.
-func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []string, providerOptions map[string]map[string]string, options *SessionOptions) (*Session, error) {
+func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []string, providerOptions map[string]map[string]string) (*Session, error) {
 	if !IsInitialized() {
 		return nil, ErrNotInitialized
 	}
@@ -634,30 +647,21 @@ func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []str
 	session := &Session{
 		model:      &model,
 		tokenizer:  &tokenizer,
-		options:    options,
 		statistics: &Statistics{},
-	}
-	// Initialize multimodal processor if needed
-	err = initMultimodalProcessor(session, options)
-	if err != nil {
-		session.Destroy()
-		return nil, fmt.Errorf("initMultimodalProcessor failed: %w", err)
 	}
 	return session, nil
 }
 
-func initMultimodalProcessor(session *Session, options *SessionOptions) error {
-	if options != nil && options.Multimodal {
-		processor, errProcessor := createMultiModalProcessor(session.model)
-		if errProcessor != nil {
-			return fmt.Errorf("createMultiModalProcessor failed: %w", errProcessor)
-		}
-		session.processor = processor
+func initMultimodalProcessor(session *Session) error {
+	processor, errProcessor := createMultiModalProcessor(session.model)
+	if errProcessor != nil {
+		return fmt.Errorf("createMultiModalProcessor failed: %w", errProcessor)
 	}
+	session.processor = processor
 	return nil
 }
 
-func CreateGenerativeSession(modelPath string, options *SessionOptions) (*Session, error) {
+func CreateGenerativeSession(modelPath string) (*Session, error) {
 	if !IsInitialized() {
 		return nil, ErrNotInitialized
 	}
@@ -685,14 +689,7 @@ func CreateGenerativeSession(modelPath string, options *SessionOptions) (*Sessio
 	session := &Session{
 		model:      &model,
 		tokenizer:  &tokenizer,
-		options:    options,
 		statistics: &Statistics{},
-	}
-	// Initialize multimodal processor if needed
-	err = initMultimodalProcessor(session, options)
-	if err != nil {
-		session.Destroy()
-		return nil, fmt.Errorf("initMultimodalProcessor failed: %w", err)
 	}
 	return session, nil
 }

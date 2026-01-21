@@ -88,7 +88,7 @@ func TestGeneration(t *testing.T) {
 
 	modelPath := "./_models/phi3.5"
 
-	session, err := CreateGenerativeSession(modelPath, nil)
+	session, err := CreateGenerativeSession(modelPath)
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
@@ -269,7 +269,6 @@ func TestParseDataURI(t *testing.T) {
 // TestMultimodalGeneration tests the full multimodal pipeline.
 // Requires a vision-language model (e.g., phi-3.5-vision).
 func TestMultimodalGeneration(t *testing.T) {
-	t.Skip() // skip by default in CI
 	visionModelPath := "./_models/phi3.5vision"
 	if _, err := os.Stat(visionModelPath); os.IsNotExist(err) {
 		t.Skip("Vision model not found at " + visionModelPath)
@@ -286,11 +285,7 @@ func TestMultimodalGeneration(t *testing.T) {
 		}
 	}()
 
-	options := &SessionOptions{
-		Multimodal: true,
-	}
-
-	session, err := CreateGenerativeSession(visionModelPath, options)
+	session, err := CreateGenerativeSession(visionModelPath)
 	if err != nil {
 		t.Fatalf("failed to create session: %v", err)
 	}
@@ -307,7 +302,11 @@ func TestMultimodalGeneration(t *testing.T) {
 	}
 	defer images.Destroy()
 
-	prompt := "<|user|>\n<|image_1|>\nWhat is in this image?<|end|>\n<|assistant|>\n"
+	messages := []Message{
+		{Role: "system", Content: "You are a helpful assistant."},
+		// Include image token in the user content so chat template preserves it
+		{Role: "user", Content: "<|image_1|>\nWhat is in this image?"},
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute) // give this one a wide berth
 	defer cancel()
@@ -317,7 +316,7 @@ func TestMultimodalGeneration(t *testing.T) {
 		BatchSize: 1,
 	}
 
-	outputChan, errChan, err := session.GenerateWithImages(ctx, []string{prompt}, images, generationOptions)
+	outputChan, errChan, err := session.GenerateWithImages(ctx, [][]Message{messages}, images, generationOptions)
 	if err != nil {
 		t.Fatalf("GenerateWithImages failed: %v", err)
 	}

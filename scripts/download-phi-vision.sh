@@ -11,17 +11,17 @@ fi
 
 model_url_base="https://huggingface.co/microsoft/Phi-3.5-vision-instruct-onnx/resolve/main/cpu_and_mobile/cpu-int4-rtn-block-32-acc-level-4"
 model_files=(
-	"genai_config.json"
-	"phi-3.5-v-instruct-embedding.onnx"
-	"phi-3.5-v-instruct-embedding.onnx.data"
-	"phi-3.5-v-instruct-vision.onnx"
-    "phi-3.5-v-instruct-vision.onnx.data"
-	"phi-3.5-v-instruct-text.onnx"
-	"phi-3.5-v-instruct-text.onnx.data"
-	"special_tokens_map.json"
-	"tokenizer.json"
-	"tokenizer_config.json"
-    "processor_config.json"
+  "genai_config.json"
+  "phi-3.5-v-instruct-embedding.onnx"
+  "phi-3.5-v-instruct-embedding.onnx.data"
+  "phi-3.5-v-instruct-vision.onnx"
+  "phi-3.5-v-instruct-vision.onnx.data"
+  "phi-3.5-v-instruct-text.onnx"
+  "phi-3.5-v-instruct-text.onnx.data"
+  "special_tokens_map.json"
+  "tokenizer.json"
+  "tokenizer_config.json"
+  "processor_config.json"
 )
 
 mkdir -p "$model_dir"

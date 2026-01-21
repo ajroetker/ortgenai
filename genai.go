@@ -179,8 +179,8 @@ type Session struct {
 	model      *model
 	processor  *multiModalProcessor
 	tokenizer  *tokenizer
-	statistics Statistics
-	options    SessionOptions
+	statistics *Statistics
+	options    *SessionOptions
 	mutex      sync.Mutex // the C API is not thread-safe
 }
 
@@ -201,7 +201,7 @@ type Statistics struct {
 }
 
 // GetStatistics returns the last computed statistics for the session.
-func (s *Session) GetStatistics() Statistics {
+func (s *Session) GetStatistics() *Statistics {
 	return s.statistics
 }
 
@@ -490,7 +490,7 @@ func (s *Session) Generate(ctx context.Context, messages [][]Message, generation
 func (s *Session) GenerateWithImages(ctx context.Context, prompts []string, images *Images, generationOptions *GenerationOptions) (<-chan SequenceDelta, <-chan error, error) {
 	s.mutex.Lock()
 
-	if !s.options.Multimodal {
+	if s.options == nil || !s.options.Multimodal {
 		s.mutex.Unlock()
 		return nil, nil, errors.New("session was not created with multimodal support")
 	}
@@ -566,7 +566,7 @@ func (s *Session) Destroy() {
 // applies execution providers and options, creates the model and tokenizer, and returns a Session.
 // providers: list of EP names in priority order (e.g., ["cuda"], ["NvTensorRtRtx"], ["OpenVINO"]).
 // providerOptions: map of EP name -> map of key/value options.
-func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []string, providerOptions map[string]map[string]string) (*Session, error) {
+func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []string, providerOptions map[string]map[string]string, options *SessionOptions) (*Session, error) {
 	if !IsInitialized() {
 		return nil, ErrNotInitialized
 	}
@@ -630,11 +630,31 @@ func CreateGenerativeSessionAdvanced(configDirectoryPath string, providers []str
 		C.DestroyOgaModel(cModel)
 		return nil, fmt.Errorf("newTokenizerFromModel failed: %w", err)
 	}
-	return &Session{
+
+	session := &Session{
 		model:      &model,
 		tokenizer:  &tokenizer,
-		statistics: Statistics{},
-	}, nil
+		options:    options,
+		statistics: &Statistics{},
+	}
+	// Initialize multimodal processor if needed
+	err = initMultimodalProcessor(session, options)
+	if err != nil {
+		session.Destroy()
+		return nil, fmt.Errorf("initMultimodalProcessor failed: %w", err)
+	}
+	return session, nil
+}
+
+func initMultimodalProcessor(session *Session, options *SessionOptions) error {
+	if options != nil && options.Multimodal {
+		processor, errProcessor := createMultiModalProcessor(session.model)
+		if errProcessor != nil {
+			return fmt.Errorf("createMultiModalProcessor failed: %w", errProcessor)
+		}
+		session.processor = processor
+	}
+	return nil
 }
 
 func CreateGenerativeSession(modelPath string, options *SessionOptions) (*Session, error) {
@@ -662,23 +682,17 @@ func CreateGenerativeSession(modelPath string, options *SessionOptions) (*Sessio
 		C.DestroyOgaModel(cModel)
 		return nil, fmt.Errorf("newTokenizerFromModel failed: %w", err)
 	}
-
-	var processor *multiModalProcessor
-	var errProcessor error
-
-	if options.Multimodal {
-		processor, errProcessor = createMultiModalProcessor(&model)
-		if errProcessor != nil {
-			tokenizer.destroy()
-			model.destroy()
-			return nil, fmt.Errorf("createMultiModalProcessor failed: %w", errProcessor)
-		}
+	session := &Session{
+		model:      &model,
+		tokenizer:  &tokenizer,
+		options:    options,
+		statistics: &Statistics{},
 	}
-
-	return &Session{
-		model:     &model,
-		tokenizer: &tokenizer,
-		processor: processor,
-		options:   *options,
-	}, nil
+	// Initialize multimodal processor if needed
+	err = initMultimodalProcessor(session, options)
+	if err != nil {
+		session.Destroy()
+		return nil, fmt.Errorf("initMultimodalProcessor failed: %w", err)
+	}
+	return session, nil
 }

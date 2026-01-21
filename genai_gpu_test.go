@@ -25,7 +25,7 @@ func TestGenerationGPU(t *testing.T) {
 
 	providers := []string{"cuda"}
 	providerOptions := map[string]map[string]string{}
-	session, err := CreateGenerativeSessionAdvanced(modelPath, providers, providerOptions)
+	session, err := CreateGenerativeSessionAdvanced(modelPath, providers, providerOptions, nil)
 	if err != nil {
 		t.Fatalf("failed to create advanced session: %v", err)
 	}

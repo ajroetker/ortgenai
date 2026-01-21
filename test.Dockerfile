@@ -6,8 +6,8 @@ COPY . /build
 
 RUN cd /build && \
     chown -R testuser:testuser /build && \
-    curl -LO https://github.com/gotestyourself/gotestsum/releases/download/v1.12.3/gotestsum_1.12.3_linux_amd64.tar.gz && \
-    tar -xzf gotestsum_1.12.3_linux_amd64.tar.gz --directory /usr/local/bin && \
+    curl -LO https://github.com/gotestyourself/gotestsum/releases/download/v1.13.0/gotestsum_1.13.0_linux_amd64.tar.gz && \
+    tar -xzf gotestsum_1.13.0_linux_amd64.tar.gz --directory /usr/local/bin && \
     # entrypoint
     cp /build/scripts/entrypoint.sh /entrypoint.sh && sed -i 's/\r//g' /entrypoint.sh && chmod +x /entrypoint.sh
 
